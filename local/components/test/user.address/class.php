@@ -2,6 +2,7 @@
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Highloadblock\HighloadBlockTable;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Data\Cache;
 
 
 /**
@@ -21,25 +22,43 @@ class TestUserAddress  extends \CBitrixComponent
             return [];
         }
 
-        Loader::includeModule('highloadblock');
-        $entity = HighloadBlockTable::compileEntity('UserAddress');
-        $entityDataClass = $entity->getDataClass();
         
-        $filter = [
-            'UF_USER_ID' => $USER->GetId(),
-        ];
-        if (!empty($this->arParams['SHOW_ACTIVE_ONLY']) && ($this->arParams['SHOW_ACTIVE_ONLY'] == 'Y')) { 
-            $filter['UF_IS_ACTIVE'] = 1;
+        $cacheTime = 36000000;
+        $cachePath = 'component_test_user_adress';
+        $cacheId = 'adress_user_'.$USER->GetId();
+        
+        $cache = Cache::createInstance();
+        if ($cache->startDataCache($cacheTime, $cacheId, $cachePath))
+        {
+            Loader::includeModule('highloadblock');
+
+            $entity = HighloadBlockTable::compileEntity('UserAddress');
+            $entityDataClass = $entity->getDataClass();
+
+            $filter = [
+                'UF_USER_ID' => $USER->GetId(),
+            ];
+            if (!empty($this->arParams['SHOW_ACTIVE_ONLY']) && ($this->arParams['SHOW_ACTIVE_ONLY'] == 'Y')) { 
+                $filter['UF_IS_ACTIVE'] = 1;
+            }
+
+            $iterator = $entityDataClass::getList([
+                'select' => ['ID', 'UF_ADDRESS'],
+                'filter' => $filter,
+                'order' => [
+                    'UF_ADDRESS' => 'ASC',
+                ],
+            ])->fetchAll();
+            
+            $cache->endDataCache([
+                'adresses' => $iterator,
+            ]);
+            
+        } else {
+            $iterator = $cache->GetVars()['adresses'];
         }
-
-        $iterator = $entityDataClass::getList([
-            'select' => ['ID', 'UF_ADDRESS'],
-            'filter' => $filter,
-            'order' => [
-                'UF_ADDRESS' => 'ASC',
-            ],
-        ])->fetchAll();
-
+        
+        
         foreach ($iterator as $item) {
             $columns = [
                 'ADDRESS' => $item['UF_ADDRESS'],
